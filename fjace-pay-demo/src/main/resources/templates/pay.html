@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<style>
+    .b1 {
+        margin-top: 15px;
+        height: 50px;
+        width: 160px;
+        border-radius: 10px;
+        border: 0 solid;
+        background: lightskyblue;
+    }
+    .b2 {
+        margin-top: 15px;
+        height: 30px;
+        width: 100px;
+        border-radius: 10px;
+        border: 0 solid;
+        background: lightskyblue;
+    }
+    .center {
+        margin: auto;
+        width: 50%;
+        border: 3px solid green;
+        padding: 10px 10px 25px 10px;
+        height: 400px;
+    }
+    .order-id {
+        margin-top: 15px;
+        text-align: center;
+        font-size: 16px;
+    }
+</style>
+<body style="text-align: center">
+<div class="center">
+    <div>
+        <button class="b2" name="" id="genOrderId" onclick="genOrderId()">生成订单号</button>
+        <div>
+            <input class="order-id" id="orderId"/>
+        </div>
+    </div>
+
+    <button class="b1" name="" id="getQrCode" onclick="getQrCode()">获取二维码</button>
+    <div style="margin-top: 15px">
+        <input id="payOrderId" style="display: none">
+        <img style="height: 200px; width: 200px; border: none" id="qrImg">
+    </div>
+    <p id="result"></p>
+    <button onclick="doPay()" hidden>支付</button>
+</div>
+</body>
+<script>
+
+    function doPay() {
+        const http = new XMLHttpRequest();
+        const url = "http://localhost:8080/ali/pay/" + document.getElementById("payOrderId").value + "?channelUserId=1"
+        http.open('get', url)
+        http.send()
+        http.onreadystatechange = function () {
+            if (http.readyState === 4 && this.status === 200) {
+                const res = JSON.parse(http.responseText)
+                console.log(res)
+            }
+        }
+    }
+
+    function genOrderId() {
+        document.getElementById("orderId").value = new Date().getTime()
+    }
+
+    function getQrCode() {
+        const resultEle = document.getElementById("result")
+        if (document.getElementById("orderId").value === '') {
+            resultEle.style="color:red"
+            resultEle.textContent="请生成订单号"
+            return
+        } else {
+            resultEle.textContent=''
+            resultEle.style='color:black'
+        }
+        const http = new XMLHttpRequest();
+        const url = "http://localhost:8080/ali/payOrders/" + document.getElementById("orderId").value
+        http.open('get', url)
+        http.send()
+        http.onreadystatechange = function () {
+            if (http.readyState === 4 && this.status === 200) {
+                const res = JSON.parse(http.responseText)
+                document.getElementById("qrImg").src = res.data.payData
+                document.getElementById("payOrderId").value = res.data.payOrderId
+                if (res.data.payOrderId) {
+                    ws(res.data.payOrderId)
+                }
+                document.getElementById("result").textContent='等待支付...'
+            }
+        }
+    }
+
+    function ws(payOrderId) {
+        const wsUrl = "ws://127.0.0.1:8080/api/anon/ws/payOrder/" + payOrderId + "/" + new Date().getTime();
+        // Create WebSocket connection.
+        const socket = new WebSocket(wsUrl);
+        // Connection opened
+        socket.addEventListener('open', function (event) {
+            socket.send('Hello Server!');
+        });
+        // Listen for messages
+        socket.addEventListener('message', function (event) {
+            console.log('Message from server ', event.data);
+            const msg = JSON.parse(event.data)
+            if (msg.state === 2) {
+                document.getElementById("result").textContent = "支付成功"
+            } else {
+                document.getElementById("result").textContent = msg.errorMsg
+            }
+        });
+    }
+
+</script>
+</html>
